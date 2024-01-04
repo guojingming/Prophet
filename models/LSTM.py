@@ -22,7 +22,14 @@ def rand_arr(a, b, *args):
     return np.random.rand(*args) * (b - a) + a
 
 
-class LstmParam:
+class NewParams:
+    def __init__(self):
+        self.shader = None
+        self.renderer = None
+        self.runner = None
+
+
+class LSTMParam:
     def __init__(self, mem_cell_ct, x_dim):
         self.mem_cell_ct = mem_cell_ct
         self.x_dim = x_dim
@@ -32,6 +39,7 @@ class LstmParam:
         self.wi = rand_arr(-0.1, 0.1, mem_cell_ct, concat_len)
         self.wf = rand_arr(-0.1, 0.1, mem_cell_ct, concat_len)
         self.wo = rand_arr(-0.1, 0.1, mem_cell_ct, concat_len)
+
         # bias terms
         self.bg = rand_arr(-0.1, 0.1, mem_cell_ct)
         self.bi = rand_arr(-0.1, 0.1, mem_cell_ct)
@@ -46,6 +54,7 @@ class LstmParam:
         self.bi_diff = np.zeros(mem_cell_ct)
         self.bf_diff = np.zeros(mem_cell_ct)
         self.bo_diff = np.zeros(mem_cell_ct)
+        
 
     def apply_diff(self, lr=1):
         self.wg -= lr * self.wg_diff
@@ -86,7 +95,6 @@ class LstmNode:
         self.param = lstm_param
         # non-recurrent input concatenated with recurrent input
         self.xc = None
-
     def bottom_data_is(self, x, s_prev=None, h_prev=None):
         # if this is the first lstm node in the network
         if s_prev is None: s_prev = np.zeros_like(self.state.s)
@@ -94,7 +102,6 @@ class LstmNode:
         # save data for use in backprop
         self.s_prev = s_prev
         self.h_prev = h_prev
-
         # concatenate x(t) and h(t-1)
         xc = np.hstack((x, h_prev))
         self.state.g = np.tanh(np.dot(self.param.wg, xc) + self.param.bg)
@@ -103,7 +110,6 @@ class LstmNode:
         self.state.o = sigmoid(np.dot(self.param.wo, xc) + self.param.bo)
         self.state.s = self.state.g * self.state.i + s_prev * self.state.f
         self.state.h = self.state.s * self.state.o
-
         self.xc = xc
 
     def top_diff_is(self, top_diff_h, top_diff_s):
@@ -220,11 +226,12 @@ def example_0():
     # parameters for input data dimension and lstm cell count
     mem_cell_ct = 100
     x_dim = 50
-    lstm_param = LstmParam(mem_cell_ct, x_dim)
+    lstm_param = LSTMParam(mem_cell_ct, x_dim)
     lstm_net = LSTM(lstm_param)
+
     y_list = [-0.5, 0.2, 0.1, -0.5]
     input_val_arr = [np.random.random(x_dim) for _ in y_list]
-
+    
     for cur_iter in range(100):
         print("iter", "%2s" % str(cur_iter), end=": ")
         for ind in range(len(y_list)):

@@ -1,244 +1,148 @@
-import random
+import torch
+import torch.nn as nn
 
-import numpy as np
-import math
+def get_model(input_channels, output_channels):
+    return MLP(input_channels=input_channels, output_channels=output_channels, hidden_layers=[128, 512, 2048, 4096, 2048, 1024, 512])
 
-
-def sigmoid(x):
-    return 1. / (1 + np.exp(-x))
-
-
-def sigmoid_derivative(values):
-    return values * (1 - values)
+#def get_ar_model():
 
 
-def tanh_derivative(values):
-    return 1. - values ** 2
+class StockPrediction(nn.Module):
+    def __init__(self, feature_count, hidden_layers, train_seq, test_seq):
+        super().__init__()
+        self.train_seq = train_seq
+        self.test_seq = test_seq
+        self.feature_count = feature_count
+        self.input_layer = nn.Linear(in_features=self.feature_count * self.train_seq + 1, out_features=hidden_layers[0])
+        self.output_layer = nn.Linear(in_features=hidden_layers[-1], out_features=self.feature_count)
+        self.hidden_layers = []
+        for i in range(1, len(hidden_layers)):
+            self.hidden_layers.append(
+                nn.Sequential(
+                    nn.Linear(in_features=hidden_layers[i - 1], out_features=hidden_layers[i]),
+                    #nn.Tanh()
+                )
+            )
+            
+    def data_process(self, input_tensor, feature_seq, label_seq):
+        assert feature_seq + label_seq == input_tensor.shape[0]
+        start_value = input_tensor[0:1, 0:1].reshape(-1)
+        features = input_tensor[:feature_seq, 1:].reshape(-1)
+        labels = input_tensor[feature_seq:, 1:].reshape(-1)
+
+        output_feature = torch.cat([start_value, features], dim=0)
+        return output_feature, labels
+
+    def forward(self, x):
+        # Input B * N * : T-1 : Open, High, Low, Close,
+        #               : T   : High, Low, Close
+        outputs = []
+        for circle_time in range(self.test_seq):
+            hidden_features = self.input_layer(x)
+            for hidden_layer in self.hidden_layers:
+                hidden_features = hidden_layer(hidden_features)
+            output = self.output_layer(hidden_features)
+            outputs.append(output)
+            x = x[self.feature_count:]
+            x = torch.cat([x, output], dim=0)
+        return torch.cat(outputs, dim=0)
+
+    def add_sub_module(self, new_module):
+        self.input_layer.add_module(new_module)
 
 
-# createst uniform random array w/ values in [a,b) and shape args
-def rand_arr(a, b, *args):
-    np.random.seed(0)
-    return np.random.rand(*args) * (b - a) + a
+class MLP(nn.Module):
+    def __init__(self, input_channels, output_channels, hidden_layers=[1]):
+        super().__init__()
+
+        self.input_layer = nn.Linear(in_features=input_channels, out_features=hidden_layers[0])
+        self.output_layer = nn.Linear(in_features=hidden_layers[-1], out_features=output_channels)
+        self.hidden_layers = []
+        for i in range(1, len(hidden_layers)):
+            self.hidden_layers.append(
+                nn.Sequential(
+                    nn.Linear(in_features=hidden_layers[i-1],out_features=hidden_layers[i]),
+                    nn.ReLU()
+                )
+            )
+
+    def forward(self, x):
+        x = self.input_layer(x)
+        for hidden_layer in self.hidden_layers:
+            x = hidden_layer(x)
+        x = self.output_layer(x)
+        return x
+    
+
+    def add_sub_module(self, new_module):
+        self.input_layer.add_module(new_module)
 
 
-class LSTMParam:
-    def __init__(self, mem_cell_ct, x_dim):
-        self.mem_cell_ct = mem_cell_ct
-        self.x_dim = x_dim
-        concat_len = x_dim + mem_cell_ct
-        # weight matrices
-        self.wg = rand_arr(-0.1, 0.1, mem_cell_ct, concat_len)
-        self.wi = rand_arr(-0.1, 0.1, mem_cell_ct, concat_len)
-        self.wf = rand_arr(-0.1, 0.1, mem_cell_ct, concat_len)
-        self.wo = rand_arr(-0.1, 0.1, mem_cell_ct, concat_len)
-        # bias terms
-        self.bg = rand_arr(-0.1, 0.1, mem_cell_ct)
-        self.bi = rand_arr(-0.1, 0.1, mem_cell_ct)
-        self.bf = rand_arr(-0.1, 0.1, mem_cell_ct)
-        self.bo = rand_arr(-0.1, 0.1, mem_cell_ct)
-        # diffs (derivative of loss function w.r.t. all parameters)
-        self.wg_diff = np.zeros((mem_cell_ct, concat_len))
-        self.wi_diff = np.zeros((mem_cell_ct, concat_len))
-        self.wf_diff = np.zeros((mem_cell_ct, concat_len))
-        self.wo_diff = np.zeros((mem_cell_ct, concat_len))
-        self.bg_diff = np.zeros(mem_cell_ct)
-        self.bi_diff = np.zeros(mem_cell_ct)
-        self.bf_diff = np.zeros(mem_cell_ct)
-        self.bo_diff = np.zeros(mem_cell_ct)
+if __name__ == '__main__':
+    import torch
+    import numpy as np
+    array1 = [
+        3.7477644900,3.7616967000,3.7384763500,3.7477644900,
+        3.7570526300,3.7570526300,3.7431204200,3.7524085600,
+        3.7524085600,3.7709848400,3.7384763500,3.7570526300,
+        3.7570526300,3.7756289100,3.7477644900,3.7709848400,
+        3.7709848400,3.7849170500,3.7570526300,3.7756289100,
+        3.7756289100,3.7756289100,3.7616967000,3.7663407700,
+        3.7663407700,3.7709848400,3.7524085600,3.7570526300,
+        3.7616967000,3.7756289100,3.7570526300,3.7570526300,
+        3.7570526300,3.7942051900,3.7524085600,3.7802729800,
+        3.7802729800,3.7849170500,3.7709848400,3.7756289100,
+        3.7756289100,3.7802729800,3.7663407700,3.7709848400,
+        3.7663407700,3.7709848400,3.7431204200,3.7477644900,
+        3.7477644900,3.7524085600,3.7384763500,3.7524085600,
+        3.7477644900,3.7524085600,3.7384763500,3.7477644900,
+        3.7477644900,3.7616967000,3.7431204200,3.7477644900,
+        3.6781034400,3.6920356500,3.6641712300,3.6781034400,
+        3.6781034400,3.6827475100,3.6641712300,3.6688153000,
+        3.6688153000,3.6873915800,3.6641712300,3.6734593700,
+        3.6734593700,3.7013237900,3.6734593700,3.7013237900,
+        3.6827475100,3.6873915800,3.6409508800,3.6548830900,
+        3.6548830900,3.6595271600,3.5991542500,3.6037983200,
+        3.6037983200,3.6084423900,3.5805779700,3.5898661100,
+        3.5852220400,3.5898661100,3.5527135500,3.5620016900,
+        3.5620016900,3.6037983200,3.5620016900,3.5759339000,
+        3.5805779700,3.5852220400,3.5620016900,3.5759339000,
+        3.5759339000,3.5898661100,3.5712898300,3.5898661100,
+        3.5898661100,3.5945101800,3.5759339000,3.5759339000,
+        3.5712898300,3.5945101800,3.5712898300,3.5852220400,
+        3.5805779700,3.5898661100,3.5666457600,3.5712898300,
+        3.5712898300,3.5945101800,3.5620016900,3.5852220400,
+    ]
 
-    def apply_diff(self, lr=1):
-        self.wg -= lr * self.wg_diff
-        self.wi -= lr * self.wi_diff
-        self.wf -= lr * self.wf_diff
-        self.wo -= lr * self.wo_diff
-        self.bg -= lr * self.bg_diff
-        self.bi -= lr * self.bi_diff
-        self.bf -= lr * self.bf_diff
-        self.bo -= lr * self.bo_diff
-        # reset diffs to zero
-        self.wg_diff = np.zeros_like(self.wg)
-        self.wi_diff = np.zeros_like(self.wi)
-        self.wf_diff = np.zeros_like(self.wf)
-        self.wo_diff = np.zeros_like(self.wo)
-        self.bg_diff = np.zeros_like(self.bg)
-        self.bi_diff = np.zeros_like(self.bi)
-        self.bf_diff = np.zeros_like(self.bf)
-        self.bo_diff = np.zeros_like(self.bo)
+    from torch import optim
 
 
-class LstmState:
-    def __init__(self, mem_cell_ct, x_dim):
-        self.g = np.zeros(mem_cell_ct)
-        self.i = np.zeros(mem_cell_ct)
-        self.f = np.zeros(mem_cell_ct)
-        self.o = np.zeros(mem_cell_ct)
-        self.s = np.zeros(mem_cell_ct)
-        self.h = np.zeros(mem_cell_ct)
-        self.bottom_diff_h = np.zeros_like(self.h)
-        self.bottom_diff_s = np.zeros_like(self.s)
+    array1 = np.array(array1).reshape((-1, 4))
+    start_price = array1[0, 0]
+    label = array1[20:, 1:].reshape(-1)
+    array1 = array1[:20, 1:].reshape(-1)
+    array1 = np.concatenate([np.array([start_price]), array1])
 
+    tensor1 = torch.from_numpy(array1).float()
+    label = torch.from_numpy(label).float()
 
-class LstmNode:
-    def __init__(self, lstm_param, lstm_state):
-        # store reference to parameters and to activations
-        self.state = lstm_state
-        self.param = lstm_param
-        # non-recurrent input concatenated with recurrent input
-        self.xc = None
+    model = StockPrediction(feature_count=3, hidden_layers=[512, 1024, 512, 3], train_seq=20, test_seq=10)
 
-    def bottom_data_is(self, x, s_prev=None, h_prev=None):
-        # if this is the first lstm node in the network
-        if s_prev is None: s_prev = np.zeros_like(self.state.s)
-        if h_prev is None: h_prev = np.zeros_like(self.state.h)
-        # save data for use in backprop
-        self.s_prev = s_prev
-        self.h_prev = h_prev
+    epochs = 2000
 
-        # concatenate x(t) and h(t-1)
-        xc = np.hstack((x, h_prev))
-        self.state.g = np.tanh(np.dot(self.param.wg, xc) + self.param.bg)
-        self.state.i = sigmoid(np.dot(self.param.wi, xc) + self.param.bi)
-        self.state.f = sigmoid(np.dot(self.param.wf, xc) + self.param.bf)
-        self.state.o = sigmoid(np.dot(self.param.wo, xc) + self.param.bo)
-        self.state.s = self.state.g * self.state.i + s_prev * self.state.f
-        self.state.h = self.state.s * self.state.o
+    optimizer = optim.SGD(model.parameters(), lr=1e-3)
+    lr_scheduler = optim.lr_scheduler.StepLR(optimizer, gamma=0.95, step_size=epochs)
+    criterian = torch.nn.MSELoss()
 
-        self.xc = xc
+    model.train()
+    for epoch in range(epochs):
+        optimizer.zero_grad()
+        output = model(tensor1)
+        #output = torch.cat(output, dim=0)
+        loss = criterian(output, label)
 
-    def top_diff_is(self, top_diff_h, top_diff_s):
-        # notice that top_diff_s is carried along the constant error carousel
-        ds = self.state.o * top_diff_h + top_diff_s
-        do = self.state.s * top_diff_h
-        di = self.state.g * ds
-        dg = self.state.i * ds
-        df = self.s_prev * ds
+        loss.backward()
+        optimizer.step()
+        lr_scheduler.step()
 
-        # diffs w.r.t. vector inside sigma / tanh function
-        di_input = sigmoid_derivative(self.state.i) * di
-        df_input = sigmoid_derivative(self.state.f) * df
-        do_input = sigmoid_derivative(self.state.o) * do
-        dg_input = tanh_derivative(self.state.g) * dg
-
-        # diffs w.r.t. inputs
-        self.param.wi_diff += np.outer(di_input, self.xc)
-        self.param.wf_diff += np.outer(df_input, self.xc)
-        self.param.wo_diff += np.outer(do_input, self.xc)
-        self.param.wg_diff += np.outer(dg_input, self.xc)
-        self.param.bi_diff += di_input
-        self.param.bf_diff += df_input
-        self.param.bo_diff += do_input
-        self.param.bg_diff += dg_input
-
-        # compute bottom diff
-        dxc = np.zeros_like(self.xc)
-        dxc += np.dot(self.param.wi.T, di_input)
-        dxc += np.dot(self.param.wf.T, df_input)
-        dxc += np.dot(self.param.wo.T, do_input)
-        dxc += np.dot(self.param.wg.T, dg_input)
-
-        # save bottom diffs
-        self.state.bottom_diff_s = ds * self.state.f
-        self.state.bottom_diff_h = dxc[self.param.x_dim:]
-
-
-class LSTM():
-    def __init__(self, lstm_param):
-        self.lstm_param = lstm_param
-        self.lstm_node_list = []
-        # input sequence
-        self.x_list = []
-
-    def y_list_is(self, y_list, loss_layer):
-        """
-        Updates diffs by setting target sequence
-        with corresponding loss layer.
-        Will *NOT* update parameters.  To update parameters,
-        call self.lstm_param.apply_diff()
-        """
-        assert len(y_list) == len(self.x_list)
-        idx = len(self.x_list) - 1
-        # first node only gets diffs from label ...
-        loss = loss_layer.loss(self.lstm_node_list[idx].state.h, y_list[idx])
-        diff_h = loss_layer.bottom_diff(self.lstm_node_list[idx].state.h, y_list[idx])
-        # here s is not affecting loss due to h(t+1), hence we set equal to zero
-        diff_s = np.zeros(self.lstm_param.mem_cell_ct)
-        self.lstm_node_list[idx].top_diff_is(diff_h, diff_s)
-        idx -= 1
-
-        ### ... following nodes also get diffs from next nodes, hence we add diffs to diff_h
-        ### we also propagate error along constant error carousel using diff_s
-        while idx >= 0:
-            loss += loss_layer.loss(self.lstm_node_list[idx].state.h, y_list[idx])
-            diff_h = loss_layer.bottom_diff(self.lstm_node_list[idx].state.h, y_list[idx])
-            diff_h += self.lstm_node_list[idx + 1].state.bottom_diff_h
-            diff_s = self.lstm_node_list[idx + 1].state.bottom_diff_s
-            self.lstm_node_list[idx].top_diff_is(diff_h, diff_s)
-            idx -= 1
-
-        return loss
-
-    def x_list_clear(self):
-        self.x_list = []
-
-    def x_list_add(self, x):
-        self.x_list.append(x)
-        if len(self.x_list) > len(self.lstm_node_list):
-            # need to add new lstm node, create new state mem
-            lstm_state = LstmState(self.lstm_param.mem_cell_ct, self.lstm_param.x_dim)
-            self.lstm_node_list.append(LstmNode(self.lstm_param, lstm_state))
-
-        # get index of most recent x input
-        idx = len(self.x_list) - 1
-        if idx == 0:
-            # no recurrent inputs yet
-            self.lstm_node_list[idx].bottom_data_is(x)
-        else:
-            s_prev = self.lstm_node_list[idx - 1].state.s
-            h_prev = self.lstm_node_list[idx - 1].state.h
-            self.lstm_node_list[idx].bottom_data_is(x, s_prev, h_prev)
-
-class ToyLossLayer:
-    """
-    Computes square loss with first element of hidden layer array.
-    """
-    @classmethod
-    def loss(self, pred, label):
-        return (pred[0] - label) ** 2
-
-    @classmethod
-    def bottom_diff(self, pred, label):
-        diff = np.zeros_like(pred)
-        diff[0] = 2 * (pred[0] - label)
-        return diff
-
-
-def example_0():
-    # learns to repeat simple sequence from random inputs
-    np.random.seed(0)
-
-    # parameters for input data dimension and lstm cell count
-    mem_cell_ct = 100
-    x_dim = 50
-    lstm_param = LSTMParam(mem_cell_ct, x_dim)
-    lstm_net = LSTM(lstm_param)
-    y_list = [-0.5, 0.2, 0.1, -0.5]
-    input_val_arr = [np.random.random(x_dim) for _ in y_list]
-
-    for cur_iter in range(100):
-        print("iter", "%2s" % str(cur_iter), end=": ")
-        for ind in range(len(y_list)):
-            lstm_net.x_list_add(input_val_arr[ind])
-
-        print("y_pred = [" +
-              ", ".join(["% 2.5f" % lstm_net.lstm_node_list[ind].state.h[0] for ind in range(len(y_list))]) +
-              "]", end=", ")
-
-        loss = lstm_net.y_list_is(y_list, ToyLossLayer)
-        print("loss:", "%.3e" % loss)
-        lstm_param.apply_diff(lr=0.1)
-        lstm_net.x_list_clear()
-
-
-if __name__ == "__main__":
-    example_0()
+        print("epoch: {0}, loss: {1}".format(epoch, loss))
