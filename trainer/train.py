@@ -3,7 +3,7 @@ import os
 from torch import optim
 from torch.utils.data.dataloader import DataLoader
 from models.MLP import get_model,StockPrediction
-from datasets.bao_stock_dataset import BaoStockDataset
+from datasets.stock_dataset import BaoStockDataset
 from utils.plot_utils import draw_price,save_draw_price
 
 def my_loss(output, label):

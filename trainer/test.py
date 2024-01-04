@@ -4,7 +4,7 @@ import numpy as np
 from torch import optim
 from torch.utils.data.dataloader import DataLoader
 from models.MLP import get_model
-from datasets.bao_stock_dataset import BaoStockDataset
+from datasets.stock_dataset import BaoStockDataset
 from utils.plot_utils import draw_price
 
 
