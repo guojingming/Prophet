@@ -3,7 +3,7 @@ import os
 import numpy as np
 from torch import optim
 from torch.utils.data.dataloader import DataLoader
-from models.MLP import get_model
+from models.mlp import get_model
 from datasets.stock_dataset import BaoStockDataset
 from utils.plot_utils import draw_price
 
@@ -18,8 +18,6 @@ def test():
     model.eval()
 
     for iters, data_item in enumerate(test_loader):
-        # if iters >= 1:
-        #     break
         data_item = data_item.squeeze(0)[:, 0:4]
         feature, label = model.data_process(data_item, 20, 10)
         output = model(feature)

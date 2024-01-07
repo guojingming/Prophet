@@ -70,7 +70,6 @@ def construct_data_item(ori_data, splits=[], seq_length=30, data_version='v1'):
                 })
                 infos[key]['len'] += 1
 
-
     elif data_version == 'v3':
         ori_data = ori_data[:, 3:]
         for key in splits:
@@ -123,14 +122,13 @@ def gen_split(ori_data, sampling_mode='segments', train_data_ratio=0.8):
     return splits
 
 
-def gen_data_info(data_file_path, train_ratio, sampling_mode, info_save_path):
+def gen_data_info(data_file_path, train_ratio, feature_seq, output_seq, sampling_mode, info_save_path):
     csv_data = pd.read_csv(data_file_path)
     original_data = csv_data.values
     splits = gen_split(original_data, sampling_mode, train_ratio)
-    #infos = construct_data_item(original_data, splits=splits, data_version='v3')
     infos = construct_data_item(original_data,
                                 splits=splits,
-                                seq_length=30,
+                                seq_length=feature_seq + output_seq,
                                 data_version='v3')
     pickle.dump(infos, open(info_save_path, 'wb'))
     print("Stock infos write to {0}".format(info_save_path))
@@ -139,17 +137,16 @@ def gen_data_info(data_file_path, train_ratio, sampling_mode, info_save_path):
 
 
 class BaoStockDataset(Dataset):
-    def __init__(self, data_info_path, split_mode, train_seq=20, test_seq=10):
+    def __init__(self, data_info_path, split_mode, feature_seq=20, output_seq=10):
         assert split_mode in ['train', 'test', 'val']
         infos = pickle.load(open(data_info_path, 'rb'))
         self.infos = infos
         self.split = split_mode
-        self.train_seq = train_seq
-        self.test_seq = test_seq
+        self.feature_seq = feature_seq
+        self.output_seq = output_seq
 
     def __len__(self):
-        return 100
-        #return self.infos[self.split]['len']
+        return self.infos[self.split]['len']
 
     def get_item(self, index):
         index = 0
@@ -165,6 +162,12 @@ class BaoStockDataset(Dataset):
 if __name__ == '__main__':
     arg_parser = ArgumentParser()
     arg_parser.add_argument('--data_file_path', type=str, required=True)
+    arg_parser.add_argument('--feature_seq', type=int, default=20)
+    arg_parser.add_argument('--output_seq', type=int, default=10)
     args = arg_parser.parse_args()
 
-    gen_data_info(args.data_file_path, 0.8, 'sequential', 'data/A_stock_k_1h_20150701_20210701_v3.pkl')
+    feature_seq = args.feature_seq
+    output_seq = args.output_seq
+
+    gen_data_info(args.data_file_path, 0.8, feature_seq, output_seq,
+                  'sequential', 'data/A_stock_k_1h_20150701_20210701_v3.pkl')
